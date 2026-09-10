@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.log
+nats/certs/
+.DS_Store
+npm-debug.log*

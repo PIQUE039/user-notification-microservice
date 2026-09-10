@@ -1,0 +1,123 @@
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------
+  # Message broker - the only channel through which User Service and
+  # Notification Service ever communicate.
+  # ---------------------------------------------------------------------
+  nats:
+    image: nats:2.10-alpine
+    command: ["-c", "/etc/nats/nats-server.conf"]
+    environment:
+      NATS_USER: ${NATS_USER}
+      NATS_PASSWORD: ${NATS_PASSWORD}
+    volumes:
+      - ./nats/nats-server.conf:/etc/nats/nats-server.conf:ro
+      - ./nats/certs:/etc/nats/certs:ro
+      - nats-data:/data/jetstream
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------
+  # Databases - one per service (database-per-service pattern: neither
+  # service can reach into the other's data except through its API/events).
+  # ---------------------------------------------------------------------
+  user-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${USER_DB_NAME}
+      POSTGRES_USER: ${USER_DB_USER}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+      - ./user-service/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d ${USER_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
+  notification-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${NOTIF_DB_NAME}
+      POSTGRES_USER: ${NOTIF_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIF_DB_PASSWORD}
+    volumes:
+      - notif-db-data:/var/lib/postgresql/data
+      - ./notification-service/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIF_DB_USER} -d ${NOTIF_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------
+  # Application services
+  # ---------------------------------------------------------------------
+  user-service:
+    build: ./user-service
+    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+    volumes:
+      - ./nats/certs:/etc/nats/certs:ro
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+
+  notification-service:
+    build: ./notification-service
+    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+    volumes:
+      - ./nats/certs:/etc/nats/certs:ro
+    depends_on:
+      notification-postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./api-gateway
+    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "${API_GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      - user-service
+      - notification-service
+    networks:
+      - backend
+    restart: unless-stopped
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  user-db-data:
+  notif-db-data:
+  nats-data:
