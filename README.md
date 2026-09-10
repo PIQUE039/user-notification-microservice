@@ -64,6 +64,25 @@ values. At minimum, set real values for:
 bash scripts/generate-certs.sh
 ```
 
+**Windows / Git Bash users:** Git Bash auto-converts leading-slash arguments
+(like OpenSSL's `-subj "/CN=..."`) into Windows paths, which silently
+breaks this script. Run it with path conversion disabled instead:
+
+```bash
+MSYS_NO_PATHCONV=1 bash scripts/generate-certs.sh
+```
+
+Either way, verify all four files were actually created before moving on:
+
+```bash
+ls nats/certs
+# expect: ca-key.pem  ca.pem  server-cert.pem  server-key.pem
+```
+
+If any are missing, `docker compose up` will fail with `nats-server`
+unable to find its cert/key pair - regenerate rather than debugging further
+down the stack.
+
 This creates `nats/certs/{ca.pem, ca-key.pem, server-cert.pem, server-key.pem}`.
 These are self-signed and for local development only - `nats/certs/` is
 gitignored, never commit them.
@@ -96,6 +115,17 @@ curl -X POST http://localhost:8080/api/users/register \
   -d '{"name":"Priya Sharma","email":"priya@example.com","password":"password123"}'
 ```
 
+**Windows PowerShell users:** plain `curl` is aliased to `Invoke-WebRequest`
+and doesn't accept the flags above. Either call `curl.exe` explicitly with
+escaped quotes, or use the PowerShell-native equivalent:
+
+```powershell
+$response = Invoke-RestMethod -Uri "http://localhost:8080/api/users/register" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"name":"Priya Sharma","email":"priya@example.com","password":"password123"}'
+$token = $response.token
+```
+
 Copy the `token` from the response, then:
 
 ```bash
@@ -104,6 +134,13 @@ curl http://localhost:8080/api/users/profile -H "Authorization: Bearer $TOKEN"
 
 # give the event a moment to travel over NATS, then:
 curl http://localhost:8080/api/notifications -H "Authorization: Bearer $TOKEN"
+```
+
+PowerShell equivalent:
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8080/api/users/profile" -Method GET -Headers @{ Authorization = "Bearer $token" }
+Start-Sleep -Seconds 2
+Invoke-RestMethod -Uri "http://localhost:8080/api/notifications" -Method GET -Headers @{ Authorization = "Bearer $token" }
 ```
 
 You should see a "welcome" notification that was created by the
@@ -143,7 +180,7 @@ Useful for iterating on one service at a time.
 
 | Symptom | Likely cause |
 |---|---|
-| `nats-server` fails to start: `no such file or directory` for a cert | Run `scripts/generate-certs.sh` before `docker compose up` |
+| `nats-server` fails to start: `no such file or directory` for a cert | Run `scripts/generate-certs.sh` before `docker compose up`. On Windows/Git Bash, run it as `MSYS_NO_PATHCONV=1 bash scripts/generate-certs.sh` - without that, Git Bash mangles OpenSSL's `-subj` argument and the script fails silently partway through. Verify with `ls nats/certs` before proceeding either way |
 | Services can't reach Postgres | Wait for the healthcheck - Compose won't start app services until Postgres reports healthy. Check `docker compose logs user-postgres` |
 | `401 unauthorized` on a route you think should work | Token expired (`JWT_EXPIRES_IN`), or you're calling a downstream service's own port instead of the Gateway - the Gateway is what enforces auth first |
 | Notification never shows up | Check `docker compose logs notification-service` - if you see repeated redelivery errors, the consumer is nak'ing; also confirm you waited a moment after registering, since delivery is asynchronous by design |
