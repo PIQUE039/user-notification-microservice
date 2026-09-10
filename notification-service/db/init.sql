@@ -1,5 +1,3 @@
--- Notification Service database schema
--- Runs automatically on first container start via docker-entrypoint-initdb.d
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -9,13 +7,11 @@ CREATE TABLE IF NOT EXISTS notifications (
     type            VARCHAR(50) NOT NULL,
     message         TEXT NOT NULL,
     is_read         BOOLEAN NOT NULL DEFAULT false,
-    source_event_id UUID, -- NATS event id, used for idempotency (see subscriber.js)
+    source_event_id UUID, 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications (user_id);
 
--- Enforces at-most-once processing per source event even under JetStream
--- at-least-once redelivery (e.g. consumer crashes after DB write but before ack).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_source_event_id
     ON notifications (source_event_id) WHERE source_event_id IS NOT NULL;

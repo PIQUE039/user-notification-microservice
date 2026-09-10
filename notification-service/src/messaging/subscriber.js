@@ -27,12 +27,6 @@ function buildConnectOptions() {
   return opts;
 }
 
-/**
- * Turns a raw user.* domain event into a human-readable notification.
- * Keeping this mapping isolated makes it trivial to add new event types
- * later (user.deleted, user.password_reset, ...) without touching the
- * transport/ack logic below.
- */
 function toNotification(eventType, data) {
   switch (eventType) {
     case 'created':
@@ -46,14 +40,12 @@ function toNotification(eventType, data) {
 
 async function handleMessage(msg) {
   const subjectPrefix = process.env.NATS_SUBJECT_PREFIX || 'user';
-  const eventType = msg.subject.slice(subjectPrefix.length + 1); // "user.created" -> "created"
+  const eventType = msg.subject.slice(subjectPrefix.length + 1); 
 
   let event;
   try {
     event = jc.decode(msg.data);
   } catch (err) {
-    // Malformed payload can never be processed successfully - ack it so it
-    // doesn't clog the consumer with endless redeliveries, but log loudly.
     console.error(`[notification-service] failed to decode message on ${msg.subject}, dropping`, err);
     msg.ack();
     return;
@@ -77,8 +69,6 @@ async function handleMessage(msg) {
     msg.ack();
   } catch (err) {
     console.error(`[notification-service] failed to process event ${event?.eventId}, will retry`, err);
-    // Explicit negative ack: JetStream redelivers per the consumer's
-    // max_deliver / backoff policy instead of losing the message.
     msg.nak();
   }
 }
@@ -104,11 +94,11 @@ export async function connectAndSubscribe() {
   const js = nc.jetstream();
 
   const opts = consumerOpts();
-  opts.durable('notification-worker'); // durable name: consumer position survives restarts
+  opts.durable('notification-worker');
   opts.manualAck();
   opts.ackExplicit();
-  opts.ackWait(30 * 1000); // 30s to ack before JetStream considers it unacked and redelivers
-  opts.maxDeliver(5); // after 5 failed attempts, stop redelivering (would route to a DLQ in a fuller build)
+  opts.ackWait(30 * 1000); 
+  opts.maxDeliver(5); 
   opts.deliverTo(createInbox());
   opts.deliverAll();
   opts.callback((err, msg) => {

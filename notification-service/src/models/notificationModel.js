@@ -1,11 +1,5 @@
 import { pool } from '../db/pool.js';
 
-/**
- * Inserts a notification derived from a NATS event. ON CONFLICT DO NOTHING
- * against the unique (source_event_id) index makes this idempotent: if
- * JetStream redelivers the same event (at-least-once delivery), we simply
- * no-op instead of creating a duplicate notification.
- */
 export async function createNotificationFromEvent({ userId, type, message, sourceEventId }) {
   const { rows } = await pool.query(
     `INSERT INTO notifications (user_id, type, message, source_event_id)

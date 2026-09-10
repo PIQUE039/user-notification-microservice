@@ -8,8 +8,6 @@ export const apiRateLimiter = rateLimit({
   message: { error: 'rate_limited', message: 'Too many requests, please try again later' }
 });
 
-// Login/register get a tighter limit - these are the endpoints someone
-// would actually try to brute force or abuse.
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60_000,
   max: 20,

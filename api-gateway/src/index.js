@@ -14,17 +14,10 @@ app.use(cors());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(apiRateLimiter);
 
-// Gateway-level health check. Does not proxy - a health check dependent on
-// downstream services would report the gateway "down" whenever a service
-// restarts, which is misleading. Each service exposes its own /health too.
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'api-gateway' });
 });
 
-// NOTE: body parsing is intentionally NOT applied globally here. The proxy
-// middleware streams the raw request body straight to the downstream
-// service; parsing it here and re-serializing it is a common source of
-// subtle bugs (wrong Content-Length, lost fields) in gateways.
 app.use(proxyRoutes);
 
 app.use((req, res) => {

@@ -25,12 +25,6 @@ export async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const user = await createUser({ name, email, passwordHash });
 
-    // Fire-and-track: publish to NATS JetStream, not a direct call to the
-    // Notification Service. If this fails we still return 201 - the user
-    // record is the source of truth, and JetStream's own durability plus
-    // our stream retention means we don't lose the event if the publish
-    // itself succeeded; a hard publish failure is logged for follow-up
-    // rather than failing the user's registration.
     try {
       await publishUserEvent('created', { userId: user.id, name: user.name, email: user.email });
     } catch (publishErr) {

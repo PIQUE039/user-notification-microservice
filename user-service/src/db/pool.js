@@ -14,7 +14,6 @@ export const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  // Idle client errors should never crash the process - log and move on.
   console.error('[user-service] Unexpected Postgres pool error', err);
 });
 

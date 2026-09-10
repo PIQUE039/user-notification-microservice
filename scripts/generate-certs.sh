@@ -1,8 +1,4 @@
-#!/usr/bin/env bash
-# Generates a local self-signed CA + server certificate for NATS TLS.
-# This is for LOCAL DEVELOPMENT ONLY. In a real deployment, certs would
-# come from a proper CA (internal PKI, cert-manager, Let's Encrypt, etc.)
-# and this script would not be part of the deploy path.
+
 set -euo pipefail
 
 CERT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/nats/certs"

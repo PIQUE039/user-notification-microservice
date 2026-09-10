@@ -7,12 +7,6 @@ const jc = JSONCodec();
 let nc = null;
 let js = null;
 
-/**
- * Builds NATS connection options from env vars. TLS is on by default -
- * this is the "secure inter-service communication" requirement: the User
- * Service and Notification Service never talk directly to each other over
- * HTTP; they only ever see an authenticated, encrypted NATS connection.
- */
 function buildConnectOptions() {
   const opts = {
     servers: process.env.NATS_URL || 'nats://localhost:4222',
@@ -20,7 +14,7 @@ function buildConnectOptions() {
     pass: process.env.NATS_PASSWORD,
     name: 'user-service',
     reconnect: true,
-    maxReconnectAttempts: -1, // retry forever - never silently drop the broker connection
+    maxReconnectAttempts: -1,
     reconnectTimeWait: 2000
   };
 
@@ -44,15 +38,13 @@ export async function connectNats() {
   const streamName = process.env.NATS_STREAM_NAME || 'USER_EVENTS';
   const subjectPrefix = process.env.NATS_SUBJECT_PREFIX || 'user';
 
-  // Idempotent: creates the stream if missing, no-ops if it already matches.
   await jsm.streams.add({
     name: streamName,
     subjects: [`${subjectPrefix}.>`],
     retention: 'limits',
-    max_age: 7 * 24 * 60 * 60 * 1_000_000_000, // 7 days, in nanoseconds
+    max_age: 7 * 24 * 60 * 60 * 1_000_000_000,
     storage: 'file'
   }).catch(async (err) => {
-    // "stream name already in use" is fine on restart; anything else is real.
     if (!String(err.message || '').includes('already in use')) throw err;
   });
 
@@ -66,11 +58,6 @@ export async function connectNats() {
   return { nc, js };
 }
 
-/**
- * Publishes a domain event. JetStream persists the message and gives us a
- * publish ack (msg was actually stored) - this is what makes delivery
- * reliable instead of a fire-and-forget core NATS publish.
- */
 export async function publishUserEvent(eventType, payload) {
   if (!js) throw new Error('NATS JetStream not connected - call connectNats() first');
 
